@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Sofa Cost Estimation System</title>
+
+    <link rel="stylesheet" href="/frontend/style.css">
+</head>
+
+<body>
+
+    <div class="app-container">
+
+        <header class="app-header">
+            <div>
+                <h1>Sofa Cost Estimation System</h1>
+                <p>
+                    Configure sofa dimensions and generate an estimated quotation.
+                </p>
+            </div>
+        </header>
+
+
+        <main>
+
+            <section class="card">
+
+                <h2>Sofa Configuration</h2>
+
+                <div class="form-grid">
+
+                    <div class="form-group">
+                        <label for="sofaType">Sofa Type</label>
+
+                        <select id="sofaType">
+                            <option value="">Select sofa type</option>
+                        </select>
+                    </div>
+
+
+                    <div class="form-group">
+                        <label for="sofaModel">Sofa Model</label>
+
+                        <select id="sofaModel" disabled>
+                            <option value="">Select sofa model</option>
+                        </select>
+                    </div>
+
+
+                    <div class="form-group">
+                        <label for="length">Length (mm)</label>
+
+                        <input
+                            type="number"
+                            id="length"
+                            min="1"
+                            placeholder="Enter length"
+                        >
+                    </div>
+
+
+                    <div class="form-group">
+                        <label for="depth">Depth (mm)</label>
+
+                        <input
+                            type="number"
+                            id="depth"
+                            min="1"
+                            placeholder="Enter depth"
+                        >
+                    </div>
+
+
+                    <div class="form-group">
+                        <label for="height">Height (mm)</label>
+
+                        <input
+                            type="number"
+                            id="height"
+                            min="1"
+                            placeholder="Enter height"
+                        >
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <section class="card">
+
+                <h2>Customer Details</h2>
+
+                <div class="form-grid">
+
+                    <div class="form-group">
+                        <label for="customerName">Customer Name</label>
+
+                        <input
+                            type="text"
+                            id="customerName"
+                            placeholder="Enter customer name"
+                        >
+                    </div>
+
+
+                    <div class="form-group">
+                        <label for="customerContact">Customer Contact</label>
+
+                        <input
+                            type="text"
+                            id="customerContact"
+                            placeholder="Enter contact number"
+                        >
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <section class="card">
+
+                <h2>Sofa Image</h2>
+
+                <div class="upload-area">
+
+                    <input
+                        type="file"
+                        id="sofaImage"
+                        accept="image/png,image/jpeg,image/webp"
+                    >
+
+                    <p>
+                        Upload a JPG, PNG or WEBP sofa image.
+                    </p>
+
+                </div>
+
+
+                <div
+                    id="imagePreviewContainer"
+                    class="image-preview-container hidden"
+                >
+
+                    <img
+                        id="imagePreview"
+                        alt="Sofa preview"
+                    >
+
+                </div>
+
+            </section>
+
+
+            <section class="action-section">
+
+                <button
+                    id="calculateButton"
+                    type="button"
+                >
+                    Calculate Sofa Cost
+                </button>
+
+                <p
+                    id="statusMessage"
+                    class="status-message"
+                ></p>
+
+            </section>
+
+
+            <section
+                id="quotationSection"
+                class="card hidden"
+            >
+
+                <div class="quotation-header">
+
+                    <div>
+                        <h2>Quotation</h2>
+                        <p id="quotationNumber"></p>
+                    </div>
+
+                    <div class="quotation-total">
+                        <span>Estimated Total</span>
+                        <strong id="finalTotal">₹0.00</strong>
+                    </div>
+
+                </div>
+
+
+                <div class="summary-grid">
+
+                    <div class="summary-box">
+                        <span>Sofa</span>
+                        <strong id="resultSofa">-</strong>
+                    </div>
+
+                    <div class="summary-box">
+                        <span>Dimensions</span>
+                        <strong id="resultDimensions">-</strong>
+                    </div>
+
+                    <div class="summary-box">
+                        <span>Length Scale</span>
+                        <strong id="scaleLength">-</strong>
+                    </div>
+
+                    <div class="summary-box">
+                        <span>Depth Scale</span>
+                        <strong id="scaleDepth">-</strong>
+                    </div>
+
+                    <div class="summary-box">
+                        <span>Height Scale</span>
+                        <strong id="scaleHeight">-</strong>
+                    </div>
+
+                </div>
+
+
+                <h3>Cost Breakdown</h3>
+
+                <div class="cost-table-wrapper">
+
+                    <table class="cost-table">
+
+                        <tbody>
+
+                            <tr>
+                                <td>Material Cost</td>
+                                <td id="materialCost">₹0.00</td>
+                            </tr>
+
+                            <tr>
+                                <td>Labour Cost</td>
+                                <td id="labourCost">₹0.00</td>
+                            </tr>
+
+                            <tr>
+                                <td>Stitching Cost</td>
+                                <td id="stitchingCost">₹0.00</td>
+                            </tr>
+
+                            <tr>
+                                <td>Overhead</td>
+                                <td id="overheadCost">₹0.00</td>
+                            </tr>
+
+                            <tr>
+                                <td>Transportation</td>
+                                <td id="transportationCost">₹0.00</td>
+                            </tr>
+
+                            <tr>
+                                <td>Profit / Margin</td>
+                                <td id="profitCost">₹0.00</td>
+                            </tr>
+
+                            <tr class="total-row">
+                                <td>Final Quotation</td>
+                                <td id="quotationTotal">₹0.00</td>
+                            </tr>
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+
+                <h3>Scaled Bill of Materials</h3>
+
+                <div class="bom-table-wrapper">
+
+                    <table class="bom-table">
+
+                        <thead>
+
+                            <tr>
+                                <th>Component</th>
+                                <th>Material</th>
+                                <th>Quantity</th>
+                                <th>Unit</th>
+                                <th>Unit Price</th>
+                                <th>Total</th>
+                            </tr>
+
+                        </thead>
+
+                        <tbody id="bomTableBody">
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </section>
+
+        </main>
+
+    </div>
+
+
+    <script src="/frontend/app.js"></script>
+
+</body>
+</html>

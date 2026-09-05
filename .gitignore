@@ -1,0 +1,25 @@
+# Environment / secrets
+.env
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Uploaded/generated files
+backend/uploads/*
+uploads/*
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Generated files
+*.log
