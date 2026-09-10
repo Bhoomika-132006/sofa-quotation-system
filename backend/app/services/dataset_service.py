@@ -1,21 +1,39 @@
-from backend.app.database import get_connection
+from app.database import get_connection
 
+
+# =========================================================
+# SOFA TYPES
+# =========================================================
 
 def get_sofa_types():
-    """Return all sofa types available in the database."""
+    """
+    Return all sofa types available in the PostgreSQL database.
+
+    Data source:
+        public.sofa_dataset
+
+    The current database does not have a separate sofa_types
+    table, so sofa types are generated from the dataset.
+    """
 
     conn = get_connection()
 
     try:
         with conn.cursor() as cur:
+
             cur.execute(
                 """
                 SELECT
-                    sofa_type_id,
+                    ROW_NUMBER() OVER (ORDER BY sofa_type) AS sofa_type_id,
                     sofa_type,
                     seating_capacity
-                FROM sofa_types
-                ORDER BY sofa_type_id
+                FROM (
+                    SELECT DISTINCT
+                        sofa_type,
+                        seating_capacity
+                    FROM public.sofa_dataset
+                ) AS types
+                ORDER BY sofa_type;
                 """
             )
 
@@ -23,9 +41,9 @@ def get_sofa_types():
 
             return [
                 {
-                    "sofa_type_id": row[0],
+                    "sofa_type_id": int(row[0]),
                     "sofa_type": row[1],
-                    "seating_capacity": row[2],
+                    "seating_capacity": int(row[2]),
                 }
                 for row in rows
             ]
@@ -34,8 +52,21 @@ def get_sofa_types():
         conn.close()
 
 
+# =========================================================
+# SOFA MODELS
+# =========================================================
+
 def get_sofa_models(sofa_type_id=None):
-    """Return sofa models, optionally filtered by sofa type."""
+    """
+    Return sofa models from public.sofa_dataset.
+
+    Optionally filter by sofa type ID.
+
+    The current database uses sofa_id as the actual
+    manufacturing dataset identifier. A generated
+    sofa_model_id is provided for compatibility with
+    the existing Phase-1 application.
+    """
 
     conn = get_connection()
 
@@ -43,30 +74,67 @@ def get_sofa_models(sofa_type_id=None):
         with conn.cursor() as cur:
 
             query = """
+                WITH sofa_type_map AS (
+                    SELECT
+                        sofa_type,
+                        seating_capacity,
+                        ROW_NUMBER() OVER (
+                            ORDER BY sofa_type
+                        ) AS sofa_type_id
+                    FROM (
+                        SELECT DISTINCT
+                            sofa_type,
+                            seating_capacity
+                        FROM public.sofa_dataset
+                    ) AS types
+                ),
+
+                sofa_models AS (
+                    SELECT
+                        ROW_NUMBER() OVER (
+                            ORDER BY d.sofa_id
+                        ) AS sofa_model_id,
+
+                        d.sofa_id,
+                        m.sofa_type_id,
+                        d.sofa_type,
+                        d.seating_capacity,
+                        d.length_cm,
+                        d.depth_cm,
+                        d.height_cm
+
+                    FROM public.sofa_dataset d
+
+                    JOIN sofa_type_map m
+                        ON m.sofa_type = d.sofa_type
+                        AND m.seating_capacity = d.seating_capacity
+                )
+
                 SELECT
-                    sm.sofa_model_id,
-                    sm.sofa_id,
-                    sm.sofa_type_id,
-                    st.sofa_type,
-                    st.seating_capacity,
-                    sm.length_cm,
-                    sm.depth_cm,
-                    sm.height_cm
-                FROM sofa_models sm
-                JOIN sofa_types st
-                    ON st.sofa_type_id = sm.sofa_type_id
+                    sofa_model_id,
+                    sofa_id,
+                    sofa_type_id,
+                    sofa_type,
+                    seating_capacity,
+                    length_cm,
+                    depth_cm,
+                    height_cm
+
+                FROM sofa_models
             """
 
             params = ()
 
             if sofa_type_id is not None:
+
                 query += """
-                    WHERE sm.sofa_type_id = %s
+                    WHERE sofa_type_id = %s
                 """
+
                 params = (sofa_type_id,)
 
             query += """
-                ORDER BY sm.sofa_model_id
+                ORDER BY sofa_model_id;
             """
 
             cur.execute(query, params)
@@ -75,14 +143,15 @@ def get_sofa_models(sofa_type_id=None):
 
             return [
                 {
-                    "sofa_model_id": row[0],
+                    "sofa_model_id": int(row[0]),
                     "sofa_id": row[1],
-                    "sofa_type_id": row[2],
+                    "sofa_type_id": int(row[2]),
                     "sofa_type": row[3],
-                    "seating_capacity": row[4],
+                    "seating_capacity": int(row[4]),
 
-                    # Database: cm
-                    # Application: mm
+                    # PostgreSQL database: cm
+                    # Existing application: mm
+
                     "length_mm": float(row[5]) * 10,
                     "depth_mm": float(row[6]) * 10,
                     "height_mm": float(row[7]) * 10,
@@ -94,28 +163,76 @@ def get_sofa_models(sofa_type_id=None):
         conn.close()
 
 
+# =========================================================
+# GET ONE SOFA USING SOFA ID
+# =========================================================
+
 def get_sofa_model(sofa_id):
-    """Return one sofa model using its sofa code."""
+    """
+    Return one sofa model using its sofa_id.
+
+    Example:
+        get_sofa_model("S001")
+    """
 
     conn = get_connection()
 
     try:
         with conn.cursor() as cur:
+
             cur.execute(
                 """
+                WITH sofa_type_map AS (
+                    SELECT
+                        sofa_type,
+                        seating_capacity,
+                        ROW_NUMBER() OVER (
+                            ORDER BY sofa_type
+                        ) AS sofa_type_id
+                    FROM (
+                        SELECT DISTINCT
+                            sofa_type,
+                            seating_capacity
+                        FROM public.sofa_dataset
+                    ) AS types
+                ),
+
+                sofa_models AS (
+                    SELECT
+                        ROW_NUMBER() OVER (
+                            ORDER BY d.sofa_id
+                        ) AS sofa_model_id,
+
+                        d.sofa_id,
+                        m.sofa_type_id,
+                        d.sofa_type,
+                        d.seating_capacity,
+                        d.length_cm,
+                        d.depth_cm,
+                        d.height_cm
+
+                    FROM public.sofa_dataset d
+
+                    JOIN sofa_type_map m
+                        ON m.sofa_type = d.sofa_type
+                        AND m.seating_capacity = d.seating_capacity
+                )
+
                 SELECT
-                    sm.sofa_model_id,
-                    sm.sofa_id,
-                    sm.sofa_type_id,
-                    st.sofa_type,
-                    st.seating_capacity,
-                    sm.length_cm,
-                    sm.depth_cm,
-                    sm.height_cm
-                FROM sofa_models sm
-                JOIN sofa_types st
-                    ON st.sofa_type_id = sm.sofa_type_id
-                WHERE sm.sofa_id = %s
+                    sofa_model_id,
+                    sofa_id,
+                    sofa_type_id,
+                    sofa_type,
+                    seating_capacity,
+                    length_cm,
+                    depth_cm,
+                    height_cm
+
+                FROM sofa_models
+
+                WHERE sofa_id = %s
+
+                LIMIT 1;
                 """,
                 (sofa_id,),
             )
@@ -126,14 +243,15 @@ def get_sofa_model(sofa_id):
                 return None
 
             return {
-                "sofa_model_id": row[0],
+                "sofa_model_id": int(row[0]),
                 "sofa_id": row[1],
-                "sofa_type_id": row[2],
+                "sofa_type_id": int(row[2]),
                 "sofa_type": row[3],
-                "seating_capacity": row[4],
+                "seating_capacity": int(row[4]),
 
                 # Database: cm
                 # Application: mm
+
                 "length_mm": float(row[5]) * 10,
                 "depth_mm": float(row[6]) * 10,
                 "height_mm": float(row[7]) * 10,
@@ -143,28 +261,74 @@ def get_sofa_model(sofa_id):
         conn.close()
 
 
+# =========================================================
+# GET ONE SOFA USING GENERATED MODEL ID
+# =========================================================
+
 def get_sofa_model_by_id(sofa_model_id):
-    """Return one sofa model using its database primary key."""
+    """
+    Return one sofa model using the generated
+    sofa_model_id.
+    """
 
     conn = get_connection()
 
     try:
         with conn.cursor() as cur:
+
             cur.execute(
                 """
+                WITH sofa_type_map AS (
+                    SELECT
+                        sofa_type,
+                        seating_capacity,
+                        ROW_NUMBER() OVER (
+                            ORDER BY sofa_type
+                        ) AS sofa_type_id
+                    FROM (
+                        SELECT DISTINCT
+                            sofa_type,
+                            seating_capacity
+                        FROM public.sofa_dataset
+                    ) AS types
+                ),
+
+                sofa_models AS (
+                    SELECT
+                        ROW_NUMBER() OVER (
+                            ORDER BY d.sofa_id
+                        ) AS sofa_model_id,
+
+                        d.sofa_id,
+                        m.sofa_type_id,
+                        d.sofa_type,
+                        d.seating_capacity,
+                        d.length_cm,
+                        d.depth_cm,
+                        d.height_cm
+
+                    FROM public.sofa_dataset d
+
+                    JOIN sofa_type_map m
+                        ON m.sofa_type = d.sofa_type
+                        AND m.seating_capacity = d.seating_capacity
+                )
+
                 SELECT
-                    sm.sofa_model_id,
-                    sm.sofa_id,
-                    sm.sofa_type_id,
-                    st.sofa_type,
-                    st.seating_capacity,
-                    sm.length_cm,
-                    sm.depth_cm,
-                    sm.height_cm
-                FROM sofa_models sm
-                JOIN sofa_types st
-                    ON st.sofa_type_id = sm.sofa_type_id
-                WHERE sm.sofa_model_id = %s
+                    sofa_model_id,
+                    sofa_id,
+                    sofa_type_id,
+                    sofa_type,
+                    seating_capacity,
+                    length_cm,
+                    depth_cm,
+                    height_cm
+
+                FROM sofa_models
+
+                WHERE sofa_model_id = %s
+
+                LIMIT 1;
                 """,
                 (sofa_model_id,),
             )
@@ -175,14 +339,15 @@ def get_sofa_model_by_id(sofa_model_id):
                 return None
 
             return {
-                "sofa_model_id": row[0],
+                "sofa_model_id": int(row[0]),
                 "sofa_id": row[1],
-                "sofa_type_id": row[2],
+                "sofa_type_id": int(row[2]),
                 "sofa_type": row[3],
-                "seating_capacity": row[4],
+                "seating_capacity": int(row[4]),
 
                 # Database: cm
                 # Application: mm
+
                 "length_mm": float(row[5]) * 10,
                 "depth_mm": float(row[6]) * 10,
                 "height_mm": float(row[7]) * 10,
@@ -192,7 +357,13 @@ def get_sofa_model_by_id(sofa_model_id):
         conn.close()
 
 
+# =========================================================
+# GET ALL SOFA MODELS
+# =========================================================
+
 def get_all_sofa_models():
-    """Return all sofa models from the database."""
+    """
+    Return all sofa models from PostgreSQL.
+    """
 
     return get_sofa_models()

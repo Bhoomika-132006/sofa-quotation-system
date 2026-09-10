@@ -6,53 +6,42 @@ from backend.app.services.pricing_service import (
     get_current_material_prices,
 )
 
-
 def get_costing_parameters():
+    """
+    Get active costing parameters from PostgreSQL.
+    """
+
     conn = get_connection()
 
     try:
         with conn.cursor() as cur:
+
             cur.execute("""
                 SELECT
                     parameter_name,
-                    parameter_type,
-                    parameter_value,
-                    unit
-                FROM costing_parameters
+                    parameter_value
+                FROM public.costing_parameters
                 WHERE is_active = TRUE
-                  AND effective_from <= CURRENT_DATE
-                  AND (
-                      effective_to IS NULL
-                      OR effective_to >= CURRENT_DATE
-                  )
-                ORDER BY parameter_name
+                ORDER BY parameter_name;
             """)
 
             rows = cur.fetchall()
 
-            return {
-                row[0]: {
-                    "parameter_type": row[1],
-                    "parameter_value": float(row[2]),
-                    "unit": row[3],
-                }
+            parameters = {
+                row[0]: float(row[1])
                 for row in rows
             }
+
+            return parameters
 
     finally:
         conn.close()
 
-
-def calculate_material_cost(
-    scaled_items,
-    current_prices,
-):
+def calculate_material_cost(scaled_items, current_prices):
     """
-    Calculate the material bill from:
+    Calculate material cost:
 
-        scaled quantity × current database price
-
-    Material prices are never hardcoded.
+        scaled quantity × material unit cost
     """
 
     prices_by_material = {
@@ -67,14 +56,11 @@ def calculate_material_cost(
 
         material_id = item["material_id"]
 
-        price = prices_by_material.get(
-            material_id
-        )
+        price = prices_by_material.get(material_id)
 
         if price is None:
             raise ValueError(
-                "No active material price found "
-                f"for material ID {material_id}."
+                f"No material price found for material ID {material_id}."
             )
 
         scaled_quantity = float(
@@ -85,185 +71,85 @@ def calculate_material_cost(
             price["unit_price_inr"]
         )
 
-        line_total = (
-            scaled_quantity * unit_price
-        )
+        line_total = scaled_quantity * unit_price
 
         quotation_items.append({
-            "bom_item_id": item.get(
-                "bom_item_id"
-            ),
-
-            "component_id": item[
-                "component_id"
-            ],
-
-            "component_name": item.get(
-                "component_name"
-            ),
-
+            "bom_item_id": item.get("bom_item_id"),
+            "component_name": item.get("component_name"),
             "material_id": material_id,
-
             "material_name": item.get(
                 "material_name",
                 price["material_name"]
             ),
-
             "base_quantity": float(
-                item.get("quantity", 0)
+                item.get("base_quantity", item.get("quantity", 0))
             ),
-
             "scaled_quantity": scaled_quantity,
-
             "unit": item["unit"],
-
-            "material_unit": price[
-                "material_unit"
-            ],
-
+            "material_unit": price["material_unit"],
             "unit_price_inr": unit_price,
-
             "total_price_inr": line_total,
-
-            "price_effective_from": price[
-                "effective_from"
-            ],
-
-            "price_effective_to": price[
-                "effective_to"
-            ],
-
-            "price_source": price[
-                "source"
-            ],
         })
 
         total_material_cost += line_total
 
-    return (
-        total_material_cost,
-        quotation_items,
+    return total_material_cost, quotation_items
+
+
+def calculate_costs(material_cost, costing_parameters):
+
+    labour = float(
+        costing_parameters.get("LABOUR_COST", 0)
     )
 
-
-def calculate_costs(
-    material_cost,
-    costing_parameters,
-):
-
-    def get_value(name):
-
-        parameter = (
-            costing_parameters.get(name)
-        )
-
-        if parameter is None:
-            return 0.0
-
-        return float(
-            parameter["parameter_value"]
-        )
-
-    labour = get_value(
-        "LABOUR_COST"
+    stitching = float(
+        costing_parameters.get("STITCHING_COST", 0)
     )
 
-    stitching = get_value(
-        "STITCHING_COST"
+    overhead = float(
+        costing_parameters.get("OVERHEAD_COST", 0)
     )
 
-    overhead = get_value(
-        "OVERHEAD_COST"
+    transportation = 0.0
+
+    profit = float(
+        costing_parameters.get("PROFIT_MARGIN", 0)
     )
 
-    transportation = get_value(
-        "TRANSPORTATION_COST"
-    )
-
-    profit_parameter = (
-        costing_parameters.get(
-            "PROFIT_MARGIN"
-        )
-    )
-
-    if profit_parameter is None:
-
-        profit = 0.0
-
-    elif (
-        profit_parameter["parameter_type"]
-        == "PERCENTAGE"
-    ):
-
-        profit_base = (
-            material_cost
-            + labour
-            + stitching
-            + overhead
-            + transportation
-        )
-
-        profit = (
-            profit_base
-            * get_value("PROFIT_MARGIN")
-            / 100
-        )
-
-    else:
-
-        profit = get_value(
-            "PROFIT_MARGIN"
-        )
-
-    subtotal = (
+    production_cost = (
         material_cost
         + labour
         + stitching
         + overhead
-        + transportation
     )
 
-    total = (
-        subtotal + profit
-    )
+    final_price = production_cost + profit
 
     return {
-        "material_cost_inr": material_cost,
-        "labour_cost_inr": labour,
-        "stitching_cost_inr": stitching,
-        "overhead_inr": overhead,
-        "transportation_cost_inr": transportation,
-        "profit_inr": profit,
-        "subtotal_inr": subtotal,
-        "total_inr": total,
+        "material_cost": material_cost,
+        "labour_cost": labour,
+        "stitching_cost": stitching,
+        "overhead": overhead,
+        "production_cost": production_cost,
+        "profit": profit,
+        "final_price": final_price,
     }
 
 
 def build_quotation(
-    quotation_number,
-    sofa_model_id,
+    request_id,
     scaled_items,
     current_prices=None,
 ):
-    """
-    Build the quotation using database-driven
-    material prices and costing parameters.
-    """
 
     if current_prices is None:
-        current_prices = (
-            get_current_material_prices()
-        )
+        current_prices = get_current_material_prices()
 
-    costing_parameters = (
-        get_costing_parameters()
-    )
+    costing_parameters = get_costing_parameters()
 
-    material_cost, material_bill = (
-        calculate_material_cost(
-            scaled_items,
-            current_prices,
-        )
+    material_cost, material_bill = calculate_material_cost(
+        scaled_items,
+        current_prices,
     )
 
     costs = calculate_costs(
@@ -272,135 +158,70 @@ def build_quotation(
     )
 
     return {
-        "quotation_number":
-            quotation_number,
-
-        "sofa_model_id":
-            sofa_model_id,
-
+        "quotation_number": generate_quotation_number(),
+        "request_id": request_id,
         **costs,
-
-        "items":
-            material_bill,
+        "items": material_bill,
     }
 
 
 def generate_quotation_number():
 
-    timestamp = (
-        datetime.now()
-        .strftime("%Y%m%d")
-    )
+    timestamp = datetime.now().strftime("%Y%m%d")
 
-    random_part = (
-        secrets.token_hex(4)
-        .upper()
-    )
+    random_part = secrets.token_hex(4).upper()
 
-    return (
-        f"QT-{timestamp}-{random_part}"
-    )
+    return f"QT-{timestamp}-{random_part}"
 
 
-def save_quotation(
-    quotation,
-    customer_name=None,
-    customer_phone=None,
-):
+def save_quotation(quotation):
 
     conn = get_connection()
 
     try:
-
         with conn.cursor() as cur:
 
+            # Save quotation summary
             cur.execute("""
-                INSERT INTO quotations
+                INSERT INTO public.quotations
                 (
-                    quotation_number,
-                    sofa_model_id,
-                    customer_name,
-                    customer_phone,
-                    subtotal_inr,
-                    labour_cost_inr,
-                    stitching_cost_inr,
-                    overhead_inr,
-                    profit_inr,
-                    transportation_cost_inr,
-                    total_amount_inr,
-                    status
+                    request_id,
+                    material_cost,
+                    labour_cost,
+                    stitching_cost,
+                    overhead,
+                    production_cost,
+                    profit,
+                    final_price
                 )
                 VALUES
                 (
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s,
-                    %s
+                    %s, %s, %s, %s,
+                    %s, %s, %s, %s
                 )
-                RETURNING quotation_id
+                RETURNING id;
             """, (
-                quotation[
-                    "quotation_number"
-                ],
-
-                quotation[
-                    "sofa_model_id"
-                ],
-
-                customer_name,
-
-                customer_phone,
-
-                quotation[
-                    "subtotal_inr"
-                ],
-
-                quotation[
-                    "labour_cost_inr"
-                ],
-
-                quotation[
-                    "stitching_cost_inr"
-                ],
-
-                quotation[
-                    "overhead_inr"
-                ],
-
-                quotation[
-                    "profit_inr"
-                ],
-
-                quotation[
-                    "transportation_cost_inr"
-                ],
-
-                quotation[
-                    "total_inr"
-                ],
-
-                "DRAFT",
+                quotation["request_id"],
+                quotation["material_cost"],
+                quotation["labour_cost"],
+                quotation["stitching_cost"],
+                quotation["overhead"],
+                quotation["production_cost"],
+                quotation["profit"],
+                quotation["final_price"],
             ))
 
-            quotation_id = (
-                cur.fetchone()[0]
-            )
+            quotation_id = cur.fetchone()[0]
 
+            # Save individual BOM/material items
             for item in quotation["items"]:
 
                 cur.execute("""
-                    INSERT INTO quotation_items
+                    INSERT INTO public.quotation_items
                     (
                         quotation_id,
-                        component_id,
+                        bom_item_id,
+                        component_name,
                         material_id,
                         quantity,
                         unit,
@@ -409,40 +230,18 @@ def save_quotation(
                     )
                     VALUES
                     (
-                        %s,
-                        %s,
-                        %s,
-                        %s,
-                        %s,
-                        %s,
-                        %s
-                    )
+                        %s, %s, %s, %s,
+                        %s, %s, %s, %s
+                    );
                 """, (
                     quotation_id,
-
-                    item[
-                        "component_id"
-                    ],
-
-                    item[
-                        "material_id"
-                    ],
-
-                    item[
-                        "scaled_quantity"
-                    ],
-
-                    item[
-                        "unit"
-                    ],
-
-                    item[
-                        "unit_price_inr"
-                    ],
-
-                    item[
-                        "total_price_inr"
-                    ],
+                    item.get("bom_item_id"),
+                    item.get("component_name"),
+                    item["material_id"],
+                    item["scaled_quantity"],
+                    item["unit"],
+                    item["unit_price_inr"],
+                    item["total_price_inr"],
                 ))
 
             conn.commit()
@@ -450,10 +249,8 @@ def save_quotation(
             return quotation_id
 
     except Exception:
-
         conn.rollback()
         raise
 
     finally:
-
         conn.close()

@@ -1,25 +1,36 @@
-# Environment / secrets
-.env
-*.env
-
 # Python
 __pycache__/
 *.py[cod]
+*.pyo
+
+# Virtual environment
 .venv/
 venv/
 env/
 
+# Environment variables / secrets
+.env
+.env.*
+!.env.example
+
 # Streamlit
 .streamlit/secrets.toml
 
-# Uploaded/generated files
-backend/uploads/*
-uploads/*
+# Uploaded images
+uploads/
+backend/uploads/
 
-# OS/editor
+# Generated request outputs
+outputs/
+backend/outputs/
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
 .DS_Store
 Thumbs.db
-.vscode/
 
-# Generated files
+# Logs
 *.log

@@ -215,83 +215,53 @@ def get_engineering_rules() -> list[dict[str, Any]]:
 # BOM scaling
 # ---------------------------------------------------------
 
-def scale_bom(
-    bom_items: list[dict[str, Any]],
-    rules: list[dict[str, Any]],
-    scale_factors: dict[str, float],
-) -> dict[str, Any]:
+def scale_bom(bom_items, rules, scale_factors):
+    """
+    Scale BOM quantities using engineering rules.
+    """
+
+    # Normalize component names so:
+    # "WoodFrame" == "Wood Frame"
+    def normalize_name(name):
+        return str(name).replace("_", "").replace("-", "").replace(" ", "").lower()
 
     rules_by_component = {
-        rule["component_id"]: rule
+        normalize_name(rule["component_id"]): rule
         for rule in rules
     }
 
-    scaled_items = []
-    missing_rules = []
+    scaled_bom = []
 
     for item in bom_items:
+        component_name = item.get("component_name")
 
-        component_id = item["component_id"]
-
-        rule = rules_by_component.get(component_id)
-
-        if rule is None:
-            missing_rules.append(
-                {
-                    "component_id": component_id,
-                    "component_name": item.get("component_name"),
-                    "reason": "No active engineering rule found.",
-                }
-            )
+        if not component_name:
             continue
 
-        formula = rule.get("formula")
+        rule = rules_by_component.get(normalize_name(component_name))
 
-        if formula is None or not str(formula).strip():
-            missing_rules.append(
-                {
-                    "component_id": component_id,
-                    "component_name": item.get("component_name"),
-                    "reason": "Engineering rule formula is missing.",
-                    "rule_id": rule["rule_id"],
-                }
+        if not rule:
+            # No engineering rule → keep original quantity
+            scaled_quantity = float(item["quantity"])
+            scaling_applied = False
+        else:
+            scaled_quantity = evaluate_formula(
+                rule["formula"],
+                item["quantity"],
+                scale_factors
             )
-            continue
+            scaling_applied = True
 
-        base_quantity = float(item["quantity"])
+        scaled_item = {
+            **item,
+            "base_quantity": float(item["quantity"]),
+            "scaled_quantity": float(scaled_quantity),
+            "scaling_applied": scaling_applied,
+        }
 
-        scaled_quantity = evaluate_formula(
-            str(formula),
-            base_quantity,
-            scale_factors,
-        )
+        scaled_bom.append(scaled_item)
 
-        # -------------------------------------------------
-        # Whole-unit handling for piece-based components
-        # -------------------------------------------------
-
-        unit = str(item.get("unit", "")).strip().lower()
-
-        if unit in {"pcs", "pc", "piece", "pieces"}:
-            scaled_quantity = max(1, round(scaled_quantity))
-
-        scaled_items.append(
-            {
-                **item,
-                "base_quantity": base_quantity,
-                "scaled_quantity": scaled_quantity,
-                "rule_id": rule["rule_id"],
-                "formula": formula,
-            }
-        )
-
-    return {
-        "items": scaled_items,
-        "missing_rules": missing_rules,
-        "complete": len(missing_rules) == 0,
-    }
-
-
+    return scaled_bom
 # ---------------------------------------------------------
 # Complete sofa BOM scaling
 # ---------------------------------------------------------

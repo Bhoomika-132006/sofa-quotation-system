@@ -28,11 +28,17 @@ def get_config_value(name, default=None):
     Get configuration value.
 
     Priority:
-    1. Streamlit Secrets when deployed
-    2. Environment variables / .env when running locally
+    1. Environment variables / backend/.env when running locally
+    2. Streamlit Secrets when deployed
     """
 
-    # Try Streamlit Secrets first
+    # Local .env / system environment first
+    value = os.getenv(name)
+
+    if value:
+        return value
+
+    # Streamlit Secrets fallback
     try:
         import streamlit as st
 
@@ -42,8 +48,7 @@ def get_config_value(name, default=None):
     except Exception:
         pass
 
-    # Fall back to .env / system environment
-    return os.getenv(name, default)
+    return default
 
 
 def get_connection():
@@ -108,7 +113,7 @@ def get_connection():
                 dbname=database,
                 user=user,
                 password=password,
-                sslmode="require",
+                sslmode="disable",
                 connect_timeout=15,
             )
 

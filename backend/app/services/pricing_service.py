@@ -4,9 +4,9 @@ from backend.app.database import get_connection
 
 
 def get_current_material_prices(price_date=None):
-
-    if price_date is None:
-        price_date = date.today()
+    """
+    Get the current material prices from the materials table.
+    """
 
     conn = get_connection()
 
@@ -15,27 +15,14 @@ def get_current_material_prices(price_date=None):
 
             cur.execute("""
                 SELECT
-                    mp.material_id,
-                    m.material_name,
-                    m.unit,
-                    mp.unit_price_inr,
-                    mp.effective_from,
-                    mp.effective_to,
-                    mp.source
-                FROM material_prices mp
-                INNER JOIN materials m
-                    ON m.material_id = mp.material_id
-                WHERE mp.is_active = TRUE
-                  AND mp.effective_from <= %s
-                  AND (
-                      mp.effective_to IS NULL
-                      OR mp.effective_to >= %s
-                  )
-                ORDER BY m.material_name
-            """, (
-                price_date,
-                price_date,
-            ))
+                    id,
+                    material_name,
+                    unit,
+                    unit_cost,
+                    supplier
+                FROM public.materials
+                ORDER BY material_name
+            """)
 
             rows = cur.fetchall()
 
@@ -45,9 +32,7 @@ def get_current_material_prices(price_date=None):
                     "material_name": row[1],
                     "material_unit": row[2],
                     "unit_price_inr": float(row[3]),
-                    "effective_from": row[4],
-                    "effective_to": row[5],
-                    "source": row[6],
+                    "supplier": row[4],
                 }
                 for row in rows
             ]
@@ -56,13 +41,10 @@ def get_current_material_prices(price_date=None):
         conn.close()
 
 
-def get_material_price(
-    material_id,
-    price_date=None,
-):
-
-    if price_date is None:
-        price_date = date.today()
+def get_material_price(material_id, price_date=None):
+    """
+    Get the price of one material.
+    """
 
     conn = get_connection()
 
@@ -71,30 +53,15 @@ def get_material_price(
 
             cur.execute("""
                 SELECT
-                    mp.material_id,
-                    m.material_name,
-                    m.unit,
-                    mp.unit_price_inr,
-                    mp.effective_from,
-                    mp.effective_to,
-                    mp.source
-                FROM material_prices mp
-                INNER JOIN materials m
-                    ON m.material_id = mp.material_id
-                WHERE mp.material_id = %s
-                  AND mp.is_active = TRUE
-                  AND mp.effective_from <= %s
-                  AND (
-                      mp.effective_to IS NULL
-                      OR mp.effective_to >= %s
-                  )
-                ORDER BY mp.effective_from DESC
+                    id,
+                    material_name,
+                    unit,
+                    unit_cost,
+                    supplier
+                FROM public.materials
+                WHERE id = %s
                 LIMIT 1
-            """, (
-                material_id,
-                price_date,
-                price_date,
-            ))
+            """, (material_id,))
 
             row = cur.fetchone()
 
@@ -106,9 +73,7 @@ def get_material_price(
                 "material_name": row[1],
                 "material_unit": row[2],
                 "unit_price_inr": float(row[3]),
-                "effective_from": row[4],
-                "effective_to": row[5],
-                "source": row[6],
+                "supplier": row[4],
             }
 
     finally:

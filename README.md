@@ -1,62 +1,36 @@
-# Sofa Cost Estimation & Quotation System – Phase 1
+# 🛋️ Sofa Cost Estimation System
 
-## Project Overview
+A Python and PostgreSQL-based application for estimating sofa manufacturing costs.
 
-The Sofa Cost Estimation & Quotation System is a database-driven application developed to automate sofa material costing and quotation generation.
+## Main Features
 
-Phase 1 focuses on building the foundation of the costing engine by using sofa master data, Bill of Materials (BOM), engineering scaling rules, and material prices stored in a PostgreSQL database.
+- Supports **1-Seater, 2-Seater and 3-Seater** sofas.
+- Uses master sofa templates and BOM data.
+- Accepts customer dimensions in mm.
+- Calculates engineering scaling factors.
+- Calculates material, labour, stitching and overhead costs.
+- Generates the final sofa quotation.
+- Stores quotations in PostgreSQL.
+- Maintains quotation history.
+- Allows reference sofa image upload.
+- Validates and stores uploaded images.
+- Creates request-specific image and quotation files.
 
-The application allows users to select a sofa model, enter the required dimensions, calculate the scaled material requirements, generate a material bill, and create a quotation.
+## Technologies
 
----
+- Python
+- Streamlit
+- PostgreSQL
+- Pandas
+- Pillow
 
-## Phase 1 Objective
+## Current Status
 
-The main objective of Phase 1 is to develop a reliable and database-driven sofa costing engine that can:
+- **Phase 1 — Costing Engine:** ✅ Complete
+- **Phase 2 — Image Intake & Request Packaging:** ✅ Complete
+- **Phase 3 — Image Understanding:** ⏸️ Not implemented
 
-- Store sofa master models and dimensions
-- Maintain component and material master data
-- Maintain the Bill of Materials (BOM)
-- Apply engineering-based scaling rules
-- Calculate scaled component quantities
-- Retrieve current material prices from the database
-- Calculate material cost
-- Generate customer quotations
-- Store quotation details and quotation items in the database
-- Provide a user-friendly application interface
+## Run
 
----
-
-## Sofa Components
-
-The costing system currently covers the following sofa components:
-
-1. Wood Frame
-2. Plywood
-3. Seat Foam
-4. Back Foam
-5. Handle Foam
-6. Fabric
-7. Springs
-8. Clips
-9. Seat Belts
-10. Back Rest Belts
-11. Handle Frame
-
----
-
-## System Architecture
-
-```text
-User
-  ↓
-Streamlit Application
-  ↓
-Python Services
-  ↓
-Supabase PostgreSQL Database
-
-
-
-
-code README.md
+```bash
+python -m streamlit run app.py
