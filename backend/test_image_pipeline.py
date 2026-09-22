@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-from backend.app.services.image_pipeline import process_image
+from app.services.image_pipeline import process_image
 
 
 if len(sys.argv) < 2:

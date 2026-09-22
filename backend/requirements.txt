@@ -1,3 +1,5 @@
 streamlit
 psycopg[binary]
 python-dotenv
+pandas
+Pillow
